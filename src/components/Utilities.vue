@@ -46,24 +46,15 @@ export default {
     },
     methods: {
         onSubmitUtil() {
-            console.log(this.util.priv_k)
+            // console.log(this.util.priv_k)
 
             this.util.pub_k = privateKeyToPublicKey(this.util.priv_k).toString('hex')
 
-            console.log(this.util.pub_k)
+            // console.log(this.util.pub_k)
 
-            // this.util.pub_k_pem = crypto.createPublicKey({
-            //     key: this.util.pub_k,
-            //     format: 'der',
-            //     type: 'spki',
-            // }).export({
-            //     type: 'pem',
-            //     format: 'pem',
-            // })
-            
             this.util.pub_k_pem = keyEncoder.encodePublic(this.util.pub_k, 'raw', 'pem')
 
-            console.log(this.util.pub_k_pem)
+            alert(this.util.pub_k_pem)
 
         }
     }
