@@ -24,6 +24,11 @@
                 </b-form>
             </b-card-text>
         </b-card>
+        <b-card v-if="this.pem_pubk.show">
+            <b-card-text>
+                {{ this.pem_pubk.pub_k_pem }}
+            </b-card-text>
+        </b-card>
     </b-container>
 </template>
 
@@ -42,19 +47,25 @@ export default {
                 priv_k: '',
                 pub_k: '',
             },
+            pem_pubk: {
+                show: false,
+                pub_k_pem: null
+            }
         }
     },
     methods: {
-        onSubmitUtil() {
+        onSubmitUtil(event) {
+            event.preventDefault()
             // console.log(this.util.priv_k)
 
             this.util.pub_k = privateKeyToPublicKey(this.util.priv_k).toString('hex')
 
             // console.log(this.util.pub_k)
 
-            this.util.pub_k_pem = keyEncoder.encodePublic(this.util.pub_k, 'raw', 'pem')
+            this.pem_pubk.pub_k_pem = keyEncoder.encodePublic(this.util.pub_k, 'raw', 'pem')
 
-            alert(this.util.pub_k_pem)
+            // alert(this.util.pub_k_pem)
+            this.pem_pubk.show = true
 
         }
     }
