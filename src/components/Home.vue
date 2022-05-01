@@ -200,6 +200,7 @@
         } finally {
           console.log(response)
         }
+        alert("Successful Deposit!")
         console.log(response)
       },
       async onSubmitWithdraw(event) {
@@ -240,7 +241,7 @@
         let response;
 
         try {
-          response = await this.$http.post('https://pymixeth-server.com/api/withdraw', {
+          response = await this.$http.get('https://pymixeth-server.herokuapp.com/api/withdraw', {
             "msg": this.withdraw.receiver_pk_text,
             "sign": this.withdraw.sign_text,
             "G_": this.withdraw.group_text
