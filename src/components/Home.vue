@@ -123,14 +123,18 @@
 </template>
 
 <script>
-  // import VueMetamask from 'vue-metamask';
+  import detectEthereumProvider from '@metamask/detect-provider';
+  import assert from 'assert';
 
   export default {
-    // components: {
-    //   VueMetamask
-    // },
+
     data () {
       return {
+        handlers: {
+          provider: null,
+          chainId: null
+        },
+        contractAddress: '0x14de78b0110812ea6c5287018785b3af313d7fc8',
         deposit: {
           value: 0,
           receiver_pk: null,
@@ -147,6 +151,13 @@
       }
     },
     methods: {
+      async loadMetamask() {
+        this.handlers.provider = await detectEthereumProvider();
+        this.handlers.chainId = await this.handlers.provider.request({
+          method: 'eth_chainId',
+        });
+      },
+
       readFileAsync(file) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -158,6 +169,18 @@
 
       async onSubmitDeposit(event) {
         event.preventDefault()
+
+
+        try {
+          this.handlers.provider.isConnected()
+        } catch {
+          this.loadMetamask().then(() => {
+            console.log("Handlers: ", this.handlers)
+            console.log("ChainID: ", this.handlers.chainId)
+          })
+        }
+        
+
         console.log({
           "name": "deposit",
           "amount": this.deposit.value,
@@ -184,6 +207,46 @@
           "next": "sending API POST request"
         })
 
+  
+        assert(this.handlers.provider.isConnected(), "Metamask not connected!")
+
+        if (this.handlers.provider) {
+          console.log("Requesting address")
+          this.handlers.provider.request({
+            method: 'eth_requestAccounts'
+          })
+        }
+
+        console.log(this.handlers.provider)
+
+        var params = 
+          {
+            from: this.handlers.provider.selectedAddress,
+            to: '0x46FBBe1Dfe41442d36d64d1fBdEe540Ca140ba4D',
+            value: this.deposit.value.toString(),
+            chainId: '0x05',
+          }
+
+        this.handlers.provider.request({
+          method: 'eth_sendTransaction',
+          params: params
+        }).then(result => {
+          console.log({
+            "name": "deposit",
+            "status": "OK",
+            "result": result,
+            "next": "waiting for transaction to be mined"
+          })
+        }
+        ).catch(error => {
+          console.log({
+            "name": "deposit",
+            "status": "ERR",
+            "error": error,
+            "next": "waiting for transaction to be mined"
+          }, params)
+        })
+
         let response;
 
         try {
@@ -200,10 +263,21 @@
         } finally {
           console.log(response)
         }
-        console.log(response)
+
+
+
       },
       async onSubmitWithdraw(event) {
         event.preventDefault()
+
+        try {
+          this.handlers.provider.isConnected()
+        } catch {
+          this.loadMetamask().then(() => {
+            console.log("Handlers: ", this.handlers)
+          })
+        }
+
         console.log({
           "name": "withdraw",
           "receiver_pk_file": this.withdraw.receiver_pk,
@@ -240,7 +314,7 @@
         let response;
 
         try {
-          response = await this.$http.post('https://pymixeth-server.com/api/withdraw', {
+          response = await this.$http.post('https://pymixeth-server.herokuapp.com/api/withdraw', {
             "msg": this.withdraw.receiver_pk_text,
             "sign": this.withdraw.sign_text,
             "G_": this.withdraw.group_text
