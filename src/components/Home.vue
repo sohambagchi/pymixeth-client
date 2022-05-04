@@ -19,7 +19,7 @@
                     id="deposit-value-input"
                     v-model="deposit.value"
                     type="number"
-                    placeholder="ETH"
+                    placeholder="WEI"
                     required></b-form-input>
                 </b-form-group>
               </b-container>
@@ -40,6 +40,11 @@
                       >
                       </b-form-file>
                     </b-form-group>
+                  </b-card>
+                  <b-card v-if="this.deposit.show">
+                    <b-card-text>
+                      {{ this.deposit.G_ }}
+                    </b-card-text>
                   </b-card>
                 </b-container>
                 <b-button type="submit">Submit</b-button>
@@ -125,6 +130,9 @@
 <script>
   import detectEthereumProvider from '@metamask/detect-provider';
   import assert from 'assert';
+  import Web3 from 'web3';
+  import axios from 'axios';
+
 
   export default {
 
@@ -138,7 +146,9 @@
         deposit: {
           value: 0,
           receiver_pk: null,
-          receiver_pk_text: null
+          receiver_pk_text: null,
+          show: false,
+          G_: null
         },
         withdraw: {
           receiver_pk: null,
@@ -147,7 +157,61 @@
           receiver_pk_text: null,
           group_text: null,
           sign_file: null,
-        }
+        },
+        web3provider: null,
+        abi: [{
+              "anonymous": false,
+              "inputs": [{
+                  "indexed": false,
+                  "internalType": "string",
+                  "name": "error",
+                  "type": "string"
+              }],
+              "name": "LogInsufficientBalance",
+              "type": "event"
+          },
+          {
+              "inputs": [],
+              "name": "deposit",
+              "outputs": [],
+              "stateMutability": "payable",
+              "type": "function"
+          },
+          {
+              "inputs": [],
+              "name": "returnMoney",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+          },
+          {
+              "inputs": [{
+                  "internalType": "uint64",
+                  "name": "withdrawValue",
+                  "type": "uint64"
+              }],
+              "name": "withdraw",
+              "outputs": [],
+              "stateMutability": "nonpayable",
+              "type": "function"
+          },
+          {
+              "inputs": [],
+              "stateMutability": "nonpayable",
+              "type": "constructor"
+          },
+          {
+              "inputs": [],
+              "name": "owner",
+              "outputs": [{
+                  "internalType": "address payable",
+                  "name": "",
+                  "type": "address"
+              }],
+              "stateMutability": "view",
+              "type": "function"
+          }
+      ]
       }
     },
     methods: {
@@ -215,55 +279,35 @@
           this.handlers.provider.request({
             method: 'eth_requestAccounts'
           })
-        }
 
-        console.log(this.handlers.provider)
+          this.web3provider = new Web3(this.handlers.provider)
 
-        var params = 
-          {
+          const contract = new this.web3provider.eth.Contract(this.abi, this.contractAddress)
+          console.log("Contract: ", contract)
+          
+          contract.methods.deposit().send({
             from: this.handlers.provider.selectedAddress,
-            to: '0x46FBBe1Dfe41442d36d64d1fBdEe540Ca140ba4D',
-            value: this.deposit.value.toString(),
-            chainId: '0x05',
-          }
-
-        this.handlers.provider.request({
-          method: 'eth_sendTransaction',
-          params: params
-        }).then(result => {
-          console.log({
-            "name": "deposit",
-            "status": "OK",
-            "result": result,
-            "next": "waiting for transaction to be mined"
+            value: this.deposit.value,
+          }).then((receipt) => {
+            console.log("Deposit receipt: ", receipt)
+            console.log(15, this.deposit)
+            axios.post('https://pymixeth-server.herokuapp.com/api/add_address', {
+              "amt": this.deposit.value,
+              "key": this.deposit.receiver_pk_text,
+            })
+            .then(response => {
+              console.log(response)
+              this.deposit.G_ = response.data.G_;
+              this.deposit.show = true;
+            })
+            .catch(error => {
+              console.log(error)
+            })
+          }).catch((error) => {
+            console.log("Error: ", error)
           })
         }
-        ).catch(error => {
-          console.log({
-            "name": "deposit",
-            "status": "ERR",
-            "error": error,
-            "next": "waiting for transaction to be mined"
-          }, params)
-        })
-
-        let response;
-
-        try {
-          response = await this.$http.post('https://pymixeth-server.herokuapp.com/api/add_address', {
-            "key": this.deposit.receiver_pk_text,
-            "amt": this.deposit.value
-          })
-        } catch (error) {
-          response = {"err": error}
-          console.log({
-            "name": "withdraw",
-            "status": "ERR: " + error.message
-          })
-        } finally {
-          console.log(response)
-        }
-
+       
 
 
       },
