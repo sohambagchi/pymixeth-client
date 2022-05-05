@@ -10,19 +10,32 @@
               <b-form @submit="onSubmitDeposit">
                 <b-container class="py-4 fluid">
                     <b-form-group
-                  id="deposit-value-group"
-                  label="Deposit Value: "
-                  label-for="deposit-value-input"
-                  description="ETH Value to be Deposited"
-                >
-                  <b-form-input
-                    id="deposit-value-input"
-                    v-model="deposit.value"
-                    type="number"
-                    placeholder="WEI"
-                    required></b-form-input>
-                </b-form-group>
-              </b-container>
+                      id="deposit-value-group"
+                      label="Deposit Value: "
+                      label-for="deposit-value-input"
+                      description="ETH Value to be Deposited"
+                    >
+                    <b-form-input
+                      id="deposit-value-input"
+                      v-model="deposit.value"
+                      type="number"
+                      placeholder="WEI"
+                      required></b-form-input>
+                  </b-form-group>
+                  <b-form-group
+                    id="deposit-sk-group"
+                    label="Secret Key: "
+                    label-for="deposit-sk-input"
+                    description="Your Secret Key will not be stored"
+                    >
+                    <b-form-input
+                      id="deposit-sk-input"
+                      v-model="deposit.sk"
+                      type="password"
+                      placeholder="Secret Key"
+                      required></b-form-input>
+                  </b-form-group>
+                </b-container>
                 <b-container class="py-4 fluid">
                   <b-card>
                     <b-form-group
@@ -41,11 +54,24 @@
                       </b-form-file>
                     </b-form-group>
                   </b-card>
-                  <b-card v-if="this.deposit.show">
-                    <b-card-text>
-                      {{ this.deposit.G_ }}
-                    </b-card-text>
-                  </b-card>
+                  <b-container v-if="this.deposit.show">
+                    <b-card class="my-3" header-tag="header">
+                      <template #header>
+                        <h5 class="mb-0">G'</h5>
+                      </template>
+                      <b-card-text>
+                        {{ this.deposit.G_ }}
+                      </b-card-text>
+                    </b-card>
+                    <b-card class="my-3" header-tag="header">
+                      <template #header>
+                        <h5 class="mb-0">SK'</h5>
+                      </template>
+                      <b-card-text>
+                        {{ this.deposit.sk_ }}
+                      </b-card-text>
+                    </b-card>
+                  </b-container>
                 </b-container>
                 <b-button type="submit">Submit</b-button>
               </b-form>
@@ -60,7 +86,20 @@
             <b-card-text>
               <b-form @submit="onSubmitWithdraw">
                 <b-container class="py-4 fluid">
-                  <b-card>
+                  <b-form-group
+                      id="withdraw-value-group"
+                      label="Withdraw Value: "
+                      label-for="withdraw-value-input"
+                      description="ETH Value to be Withdrawn"
+                    >
+                    <b-form-input
+                      id="withdraw-value-input"
+                      v-model="withdraw.value"
+                      type="number"
+                      placeholder="WEI"
+                      required></b-form-input>
+                  </b-form-group>
+                  <b-card class="my-3">
                     <b-form-group
                       id="withdraw-receiver-pk-group"
                       label="Receiver's Public Key: "
@@ -148,7 +187,8 @@
           receiver_pk: null,
           receiver_pk_text: null,
           show: false,
-          G_: null
+          G_: null,
+          sk: null,
         },
         withdraw: {
           receiver_pk: null,
@@ -157,6 +197,7 @@
           receiver_pk_text: null,
           group_text: null,
           sign_file: null,
+          proceedWithTransaction: false
         },
         web3provider: null,
         abi: [{
@@ -294,10 +335,12 @@
             axios.post('https://pymixeth-server.herokuapp.com/api/add_address', {
               "amt": this.deposit.value,
               "key": this.deposit.receiver_pk_text,
+              "sk": this.deposit.sk
             })
             .then(response => {
               console.log(response)
               this.deposit.G_ = response.data.G_;
+              this.deposit.sk_ = response.data.sk_;
               this.deposit.show = true;
             })
             .catch(error => {
@@ -307,9 +350,6 @@
             console.log("Error: ", error)
           })
         }
-       
-
-
       },
       async onSubmitWithdraw(event) {
         event.preventDefault()
@@ -352,27 +392,50 @@
           "receiver_pk": this.withdraw.receiver_pk_text,
           "group": this.withdraw.group_text,
           "sign": this.withdraw.sign_text,
+          "amt": this.withdraw.value,
           "next": "sending API POST request"
         })
 
-        let response;
-
-        try {
-          response = await this.$http.post('https://pymixeth-server.herokuapp.com/api/withdraw', {
-            "msg": this.withdraw.receiver_pk_text,
-            "sign": this.withdraw.sign_text,
-            "G_": this.withdraw.group_text
-          })
-        } catch (error) {
-          response = {"err": error}
-          console.log({
-            "name": "withdraw",
-            "status": "ERR: " + error.message
-          })
-        } finally {
+        axios.post('https://pymixeth-server.herokuapp.com/api/withdraw', {
+          "msg": this.withdraw.receiver_pk_text,
+          "sign": this.withdraw.sign_text,
+          "G_": this.withdraw.group_text,
+          "amt": this.withdraw.value
+        }).then(response => {
           console.log(response)
+          if (response.data.status == true) {
+            this.withdraw.proceedWithTransaction = true; 
+          }
+          assert(this.handlers.provider.isConnected(), "Metamask not connected!")
+        console.log(19, "Assert Passed", this.withdraw.proceedWithTransaction)
+        if (this.withdraw.proceedWithTransaction) {
+          if (this.handlers.provider) {
+          console.log("Requesting address")
+          this.handlers.provider.request({
+            method: 'eth_requestAccounts'
+          })
+
+          this.web3provider = new Web3(this.handlers.provider)
+
+          const contract = new this.web3provider.eth.Contract(this.abi, this.contractAddress)
+          console.log("Contract: ", contract)
+          
+          contract.methods.withdraw(this.withdraw.value).send({
+            from: this.handlers.provider.selectedAddress,
+            value: 0,
+          }).then((receipt) => {
+            console.log("Withdraw receipt: ", receipt)
+          }).catch((error) => {
+            console.log("Error: ", error)
+          })
         }
-        console.log(response)
+        }
+
+
+        }).catch(error => {
+          console.log(error)
+        })
+
       }
     }
   }  
